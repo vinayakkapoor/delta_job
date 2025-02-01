@@ -5,6 +5,10 @@ Scrape career pages to extract open job / internship positions using LLMs. Compa
 
 Create a virual environment using conda / virtualenv and install the necessary packages using `pip install -r requirements.txt`
 
+Download Firefox using `wget https://ftp.mozilla.org/pub/firefox/releases/133.0/linux-x86_64/en-US/firefox-133.0.tar.bz2`
+
+And extract `tar xjf firefox-*.tar.bz2`
+
 Scrape, clean, parse using
 `python run.py`
 
