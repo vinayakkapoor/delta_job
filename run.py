@@ -34,7 +34,7 @@ from system_monitor import SystemMonitor
 # "MODEL_ID": "mistralai/Mistral-Small-24B-Instruct-2501",
 # Configuration constants
 CONFIG = {
-    "FIREFOX_BINARY": "./firefox-bin",
+    "FIREFOX_BINARY": "./firefox/firefox-bin",
     "GECKODRIVER_PATH": "./geckodriver",
     "MODEL_ID": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
     "CHUNK_SIZE": 10000,
