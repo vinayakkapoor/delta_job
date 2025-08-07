@@ -29,31 +29,21 @@ class WebScraper:
         options.binary_location = CONFIG["FIREFOX_BINARY"]
         return options
 
-    def _scrape_website(self, url: str) -> Optional[str]:
+    def _scrape_website(self, driver: Firefox, url: str) -> Optional[str]:
         """Scrape website content using Selenium with explicit waits"""
-        print(f"Starting scrape for URL: {url}", )
+        print(f"Starting scrape for URL: {url}")
         try:
-            driver = Firefox(
-                service=self.service,
-                options=self.options
-            )
             driver.get(url)
-
-            # Wait for page to load using explicit wait
-            try:
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.TAG_NAME, 'body'))
-                )
-                print(f"Page: {url} scraped successfully")
-            except TimeoutException:
-                print(f"Page: {url} - load timeout, proceeding with current content")
-            # time.sleep(10)
-
+            WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.TAG_NAME, 'body'))
+            )
+            print(f"Page: {url} scraped successfully")
             html = driver.page_source
-            driver.quit()
             print(f"Page content retrieved {len(html)} characters)")
             return html
-
+        except TimeoutException:
+            print(f"Page: {url} - load timeout, proceeding with current content")
+            return driver.page_source
         except Exception as e:
             print(f"Scraping failed for {url}: {str(e)}")
             return None
@@ -66,16 +56,13 @@ class WebScraper:
 
         try:
             soup = BeautifulSoup(html, "html.parser")
-
-            unwanted_tags = soup(["script", "style"])
+            unwanted_tags = soup.find_all(["script", "style", "header", "footer", "nav", "aside"])
             for tag in unwanted_tags:
                 tag.decompose()
 
             text = soup.get_text(separator="\n")
             cleaned_lines = [line.strip() for line in text.splitlines() if line.strip()]
-
             print(f"Lines after cleaning - {len(cleaned_lines)}")
-
             return "\n".join(cleaned_lines)
         except Exception as e:
             print(f"HTML processing failed: {str(e)}")
@@ -91,7 +78,11 @@ class WebScraper:
         Returns:
             The cleaned HTML content as a string.
         """
-        html = self._scrape_website(url)
-        if html:
-            return self._process_html_content(html)
-        return ""
+        driver = Firefox(service=self.service, options=self.options)
+        try:
+            html = self._scrape_website(driver, url)
+            if html:
+                return self._process_html_content(html)
+            return ""
+        finally:
+            driver.quit()
