@@ -1,84 +1,116 @@
-
-import asyncio
-import yaml
-import json
 import ast
-from datetime import datetime
+import yaml
+import time
+import json
+import datetime
+from threading import Thread, Lock
+from typing import Callable
 
 from agents.gemma_llm_agent import LLMAgent
 from agents.web_scraping_agent import WebScraper
 
-# Dictionary to store job titles for each company
-company_jobs = {}
+NUM_THREADS_SCRAPE = 5
 
-# Initialize agents
 web_scraper = WebScraper()
 llm_agent = LLMAgent()
+lock = Lock()
 
 
-async def scrape_company(company_name, url):
-    """Asynchronously scrapes a company's career page, processes it with an LLM,
-    and stores the results."""
-    print(f"Starting to scrape: {company_name}")
+scraped_pages = []
+job_titles = []
+all_pages_scraped = False
+
+def load_career_pages(file='career_pages_short.yaml') -> dict:
+    with open(file, 'r') as yaml_file:
+        career_pages = yaml.safe_load(yaml_file)
+    return career_pages
+
+def url_generator(career_page_urls: list[str]):
+    for url in career_page_urls:
+        yield url
+
+def update_scraped_pages(url, web_scraper):
+    print(f"scraping: {url}")
+    page = web_scraper.run(url)
+    with lock:
+        scraped_pages.append(page)
+
+def page_scrape_worker(url_gen: Callable) -> None:
+    web_scraper = WebScraper()
     try:
-        scraped_content = web_scraper.run(url)
-        if scraped_content:
-            job_titles_str = llm_agent.run(scraped_content)
-            try:
-                job_titles = ast.literal_eval(job_titles_str)
-                if not isinstance(job_titles, list):
-                    job_titles = [str(job_titles)]
-            except (ValueError, SyntaxError):
-                job_titles = [job_titles_str.strip()]
-            company_jobs[company_name] = job_titles
-            print(f"Successfully scraped and processed: {company_name}")
+        while True:
+            url = next(url_gen)
+            update_scraped_pages(url, web_scraper)
+    except StopIteration:
+        pass
+
+def get_job_titles():
+    with lock:
+        if len(scraped_pages) != 0:
+            page = scraped_pages.pop(0)
         else:
-            print(f"No content scraped from: {company_name}")
-            company_jobs[company_name] = []
-    except Exception as e:
-        print(f"An error occurred while processing {company_name}: {e}")
-        company_jobs[company_name] = ["Error during scraping"]
+            page = ""
+    if not page == "":        
+        try:
+            print("*** Running inference ***")
+            t1 = time.time()
+            job_titles_str = llm_agent.run(page)
+            t2 = time.time()
+            if job_titles_str == None:
+                print("Rate limit hit, waiting for 1 minute before querying")
+                time.sleep(65)
+                t1 = time.time()
+                job_titles_str = llm_agent.run(page)
+                t2 = time.time()
+            print(f"This instance of inference took: {t2-t1} sec")
+            titles = ast.literal_eval(str(job_titles_str))
+            return titles
+        except Exception as e:
+            print(f"Invalid output by llm {job_titles_str} \n\n {str(e)}")
+    
+    return []
+
+def llm_inference_worker():
+    while not all_pages_scraped or len(scraped_pages) > 0:
+        titles = get_job_titles()
+        with lock:
+            job_titles.append(titles)
+        time.sleep(2) # avoid rate limits
 
 
-async def save_results_periodically():
-    """Periodically saves the company_jobs dictionary to a file."""
-    while True:
-        await asyncio.sleep(60)  # Wait for 60 seconds
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"job_results_{timestamp}.json"
-        with open(filename, "w") as f:
-            json.dump(company_jobs, f, indent=4)
-        print(f"Results saved to {filename}")
+def main():
+    career_pages = load_career_pages()
+    
+    companies = career_pages.keys()
+    career_page_urls = career_pages.values()
 
+    url_gen = url_generator(career_page_urls)
+    
+    scrape_threads = []
+    for i in range(NUM_THREADS_SCRAPE):
+        t = Thread(target=page_scrape_worker, args=(url_gen, ))
+        scrape_threads.append(t)
+    for t in scrape_threads:
+        t.start()
+    
+    llm_thread = Thread(target=llm_inference_worker)
+    llm_thread.start()
+    
+    for t in scrape_threads:
+        t.join()
 
-async def main():
-    """Main function to orchestrate the scraping and saving tasks."""
-    # Load career pages from YAML file
-    with open("career_pages.yaml", "r") as f:
-        career_pages = yaml.safe_load(f)
+    global all_pages_scraped
+    all_pages_scraped = True
 
-    # Start the periodic saving task
-    save_task = asyncio.create_task(save_results_periodically())
+    llm_thread.join()
 
-    # Create and queue scraping tasks with a delay
-    scraping_tasks = []
-    for company, url in career_pages.items():
-        task = asyncio.create_task(scrape_company(company, url))
-        scraping_tasks.append(task)
-        await asyncio.sleep(3)  # 3-second delay between starting each company scrape
-
-    # Wait for all scraping tasks to complete
-    await asyncio.gather(*scraping_tasks)
-
-    # At the end, do a final save
-    final_filename = "final_job_results.json"
-    with open(final_filename, "w") as f:
-        json.dump(company_jobs, f, indent=4)
-    print(f"Final results saved to {final_filename}")
-
-    # Stop the periodic saving task
-    save_task.cancel()
+    company_jobs = dict(zip(companies, job_titles))
+    file_path = f"job_titles_{datetime.datetime.now().isoformat()}.json"
+    with open(file_path, "w") as json_file:
+        json.dump(company_jobs, json_file, indent=4)
+    print(company_jobs)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
+

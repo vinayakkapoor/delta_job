@@ -1,4 +1,4 @@
-import time
+import os
 from typing import Optional
 
 from bs4 import BeautifulSoup
@@ -10,10 +10,12 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
-# Configuration constants
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+
 CONFIG = {
-    "FIREFOX_BINARY": "/home/takeoff/delta_job/firefox/firefox-bin",
-    "GECKODRIVER_PATH": "/home/takeoff/delta_job/geckodriver",
+    "FIREFOX_BINARY": f"{parent_dir}/firefox/firefox-bin",
+    "GECKODRIVER_PATH": f"{parent_dir}/geckodriver",
 }
 class WebScraper:
     def __init__(self):
@@ -42,6 +44,7 @@ class WebScraper:
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.TAG_NAME, 'body'))
                 )
+                print(f"Page: {url} scraped successfully")
             except TimeoutException:
                 print(f"Page: {url} - load timeout, proceeding with current content")
             # time.sleep(10)
@@ -64,7 +67,9 @@ class WebScraper:
         try:
             soup = BeautifulSoup(html, "html.parser")
 
-            removed_elements = soup(["script", "style", "nav", "footer"])
+            unwanted_tags = soup(["script", "style"])
+            for tag in unwanted_tags:
+                tag.decompose()
 
             text = soup.get_text(separator="\n")
             cleaned_lines = [line.strip() for line in text.splitlines() if line.strip()]

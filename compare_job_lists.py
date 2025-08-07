@@ -1,6 +1,6 @@
 import json
 
-def find_new_jobs(file1_path, file2_path, output_path=None):
+def find_new_jobs(file1_path, file2_path, output_path='./results.json'):
     """
     Compare two JSON files and find new job titles in the second file
     that don't exist in the first file for each company
@@ -38,8 +38,8 @@ if __name__ == "__main__":
     # if len(sys.argv) != 4:
     #     print("Usage: python job_comparison.py <file1.json> <file2.json> <output.json>")
     #     sys.exit(1)
-    output_path1 = './job_lists_1.json'
-    output_path2 = './job_lists_2.json'
+    output_path1 = './job_titles_1.json'
+    output_path2 = './job_titles_2.json'
     find_new_jobs(output_path1, output_path2)
     
     # find_new_jobs(sys.argv[1], sys.argv[2], sys.argv[3])

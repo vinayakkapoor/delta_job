@@ -42,6 +42,9 @@ class LLMAgent():
             )
         )
 
-        response = self.client.models.generate_content(model=self.model_name_str, contents=contents)
+        try:
+            response = self.client.models.generate_content(model=self.model_name_str, contents=contents)
+        except:
+            return None
 
         return response.text
