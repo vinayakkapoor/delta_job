@@ -20,7 +20,7 @@ scraped_pages = []
 job_titles = []
 all_pages_scraped = False
 
-def load_career_pages(file='career_pages_short.yaml') -> dict:
+def load_career_pages(file='career_pages.yaml') -> dict:
     with open(file, 'r') as yaml_file:
         career_pages = yaml.safe_load(yaml_file)
     return career_pages
